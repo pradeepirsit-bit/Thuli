@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TNSnap - Native Plant ID</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2E7D32">
+    <link rel="apple-touch-icon" href="icon.png">
+    <style>
+        :root {
+            --primary: #2E7D32;
+            --primary-light: #E8F5E9;
+            --primary-dark: #1B5E20;
+            --bg-color: #F4F6F4;
+            --surface-color: #FFFFFF;
+            --text-main: #2C3E50;
+            --text-muted: #7F8C8D;
+            --danger: #E74C3C;
+            --success: #27AE60;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+
+        body {
+            background-color: var(--bg-color);
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+            color: var(--text-main);
+        }
+
+        /* 1. Fluid App Container */
+        .app-container {
+            width: 100%;
+            max-width: 1200px;
+            min-height: 100vh;
+            background: var(--surface-color);
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 20px rgba(0,0,0,0.05);
+        }
+
+        header {
+            background: var(--surface-color);
+            padding: 20px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #E0E0E0;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+
+        .header-title { font-weight: 700; color: var(--primary); font-size: 1.4rem; }
+        .header-location { font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: center; gap: 4px;}
+
+        /* 2. Main Content Layout */
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .view-container {
+            flex: 1;
+            position: relative;
+            overflow-y: auto;
+        }
+
+        .view {
+            padding: 24px;
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+        .view.active { display: block; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Component Styles */
+        .status-card {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white; padding: 32px; border-radius: 16px; margin-bottom: 24px; text-align: center;
+        }
+
+        .action-button {
+            width: 100%; padding: 16px; border-radius: 12px; border: none; font-size: 1rem;
+            font-weight: 600; cursor: pointer; transition: transform 0.1s, opacity 0.2s;
+            display: flex; justify-content: center; align-items: center; gap: 8px;
+        }
+        .action-button:active { transform: scale(0.98); }
+        .btn-primary { background: var(--primary); color: white; box-shadow: 0 4px 12px rgba(46, 125, 50, 0.3); }
+        .btn-secondary { background: var(--surface-color); color: var(--primary); border: 2px solid var(--primary); }
+        .btn-export { background: #333; color: white; margin-top: 12px; }
+
+        .section-title { font-size: 1.1rem; color: var(--text-main); margin-bottom: 12px; font-weight: 600; }
+        
+        .info-panel {
+            background: var(--surface-color); padding: 16px; border-radius: 12px;
+            margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 1px solid #f0f0f0;
+            cursor: pointer;
+        }
+
+        .tag {
+            display: inline-block; padding: 4px 8px; border-radius: 6px;
+            font-size: 0.8rem; font-weight: 600; margin-bottom: 12px;
+        }
+        .tag-medicinal { background: var(--primary-light); color: var(--primary-dark); }
+        .tag-invasive { background: #FFEBEE; color: #C62828; }
+
+        /* Camera View Layout */
+        #view-camera { background: #000; padding: 0; min-height: 100%; position: relative; }
+        .camera-frame {
+            position: absolute; top: 10%; left: 10%; right: 10%; bottom: 25%;
+            border: 2px solid rgba(255,255,255,0.5); border-radius: 16px;
+            display: flex; justify-content: center; align-items: center; flex-direction: column; color: white;
+        }
+        .shutter {
+            position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+            width: 72px; height: 72px; border-radius: 50%; background: white;
+            border: 6px solid rgba(255,255,255,0.3); cursor: pointer;
+        }
+
+        /* Result View */
+        .result-header { text-align: center; margin-bottom: 24px; padding-top: 12px; }
+        .plant-title { font-size: 1.8rem; color: var(--primary-dark); }
+        .plant-scientific { font-style: italic; color: var(--text-muted); }
+
+        /* Grid for Almanac */
+        .almanac-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 16px;
+        }
+
+        /* 3. Navigation - Desktop Default (Sidebar) */
+        nav {
+            width: 250px;
+            background: #FAFAFA;
+            border-right: 1px solid #E0E0E0;
+            display: flex;
+            flex-direction: column;
+            padding: 24px 0;
+        }
+        .nav-item {
+            padding: 16px 24px; display: flex; align-items: center; gap: 12px;
+            color: var(--text-muted); cursor: pointer; font-size: 1rem;
+            transition: background 0.2s;
+        }
+        .nav-item:hover { background: #F0F0F0; }
+        .nav-item.active { color: var(--primary); font-weight: 600; border-left: 4px solid var(--primary); background: var(--primary-light); }
+        .nav-icon { font-size: 1.2rem; }
+
+        /* 4. Mobile Responsive Breakpoint */
+        @media (max-width: 768px) {
+            .main-content { flex-direction: column; }
+            .view-container { padding-bottom: 70px; }
+            
+            nav {
+                width: 100%; height: 70px; flex-direction: row; position: fixed;
+                bottom: 0; left: 0; border-right: none; border-top: 1px solid #E0E0E0;
+                padding: 0; padding-bottom: env(safe-area-inset-bottom); z-index: 100;
+            }
+            .nav-item {
+                flex: 1; flex-direction: column; justify-content: center; gap: 4px;
+                padding: 8px 0; font-size: 0.75rem; border-left: none;
+            }
+            .nav-item.active { border-left: none; border-top: 3px solid var(--primary); background: transparent; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <header>
+        <div class="header-title">🌿 TNSnap</div>
+        <div class="header-location">📍 Chennai, TN</div>
+    </header>
+
+    <div class="main-content">
+        <nav>
+            <div class="nav-item active" onclick="app.navigateTo('view-dashboard')" data-target="view-dashboard">
+                <span class="nav-icon">🏠</span><span>Dashboard</span>
+            </div>
+            <div class="nav-item" onclick="app.navigateTo('view-almanac')" data-target="view-almanac">
+                <span class="nav-icon">📖</span><span>Almanac</span>
+            </div>
+            <div class="nav-item" onclick="app.navigateTo('view-settings')" data-target="view-settings">
+                <span class="nav-icon">⚙️</span><span>Settings</span>
+            </div>
+        </nav>
+
+        <div class="view-container">
+            
+            <main id="view-dashboard" class="view active">
+                <div class="status-card">
+                    <h2>Discover Native Flora</h2>
+                    <p style="margin-top: 8px; opacity: 0.9; font-size: 0.9rem;">Identify medicinal plants & track invasive species.</p>
+                </div>
+
+                <button class="action-button btn-primary" onclick="app.navigateTo('view-camera')" style="margin-bottom: 24px;">
+                    📷 Snap to Identify
+                </button>
+
+                <h3 class="section-title">Recent Local Discoveries</h3>
+                
+                <div class="info-panel" style="display: flex; gap: 16px; align-items: center;" onclick="app.showPlantMockData('kuppaimeni')">
+                    <div style="width: 60px; height: 60px; background: #C8E6C9; border-radius: 8px; display: flex; justify-content: center; align-items: center; font-size: 1.5rem;">🌿</div>
+                    <div>
+                        <h4 style="color: var(--text-main);">Kuppaimeni</h4>
+                        <p style="font-size: 0.85rem; color: var(--text-muted);">Acalypha indica • Click to inspect</p>
+                    </div>
+                </div>
+
+                <div class="info-panel" style="display: flex; gap: 16px; align-items: center;" onclick="app.showPlantMockData('karuvelam')">
+                    <div style="width: 60px; height: 60px; background: #FFCDD2; border-radius: 8px; display: flex; justify-content: center; align-items: center; font-size: 1.5rem;">⚠️</div>
+                    <div>
+                        <h4 style="color: var(--text-main);">Seemai Karuvelam</h4>
+                        <p style="font-size: 0.85rem; color: var(--text-muted);">Prosopis juliflora • Click to inspect</p>
+                    </div>
+                </div>
+            </main>
+
+            <main id="view-camera" class="view" style="padding: 0; position: relative;">
+                <video id="camera-stream" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; z-index: 1;"></video>
+                <canvas id="snapshot-canvas" style="display: none;"></canvas>
+
+                <div class="camera-frame" style="z-index: 10;">
+                    <span style="font-size: 2rem; margin-bottom: 12px; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">📱</span>
+                    <p style="text-align: center; padding: 0 20px; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">Center the leaf or flower in frame</p>
+                    <p id="ai-processing-text" style="display: none; margin-top: 20px; color: #4fc3f7; background: rgba(0,0,0,0.7); padding: 8px; border-radius: 8px;">Analyzing via Vision Model...</p>
+                </div>
+                
+                <div class="shutter" onclick="app.takeSnapshot()" style="z-index: 10;"></div>
+            </main>
+
+            <main id="view-result" class="view">
+                <button class="action-button" style="background: transparent; border: 1px solid #ccc; color: var(--text-main); width: auto; padding: 8px 16px;" onclick="app.navigateTo('view-dashboard')">
+                    ← Back
+                </button>
+
+                <div class="result-header">
+                    <h1 class="plant-title" id="res-name">Kuppaimeni</h1>
+                    <p class="plant-scientific" id="res-scientific">Acalypha indica</p>
+                </div>
+
+                <div class="info-panel" id="res-info-container">
+                    <span id="res-tag" class="tag tag-medicinal">Native Medicinal</span>
+                    <p id="res-uses">Known in Siddha medicine for treating skin conditions and minor structural inflammations.</p>
+                </div>
+
+                <div class="info-panel" style="background: #FFF3E0; border-color: #FFE0B2;">
+                    <p style="font-size: 0.9rem; color: #E65100;"><strong>🏆 Badge Progress:</strong> Siddha Apprentice (7/10)</p>
+                    <div style="width: 100%; height: 8px; background: #FFE0B2; border-radius: 4px; margin-top: 8px; overflow: hidden;">
+                        <div style="width: 70%; height: 100%; background: #FF9800;"></div>
+                    </div>
+                </div>
+
+                <button class="action-button btn-secondary">🛒 Find Local Nursery</button>
+                <button class="action-button btn-export" onclick="app.exportToMarkdown()">📝 Export Note to Markdown</button>
+            </main>
+
+            <main id="view-almanac" class="view">
+                <h2 class="section-title" style="font-size: 1.5rem; margin-bottom: 20px;">Digital Herbarium</h2>
+                
+                <div class="almanac-grid">
+                    <div class="info-panel" style="padding: 12px; text-align: center; margin-bottom: 0;" onclick="app.showPlantMockData('adathodai')">
+                        <div style="height: 100px; background: #A5D6A7; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: center; align-items: center; font-size: 2rem;">🌿</div>
+                        <h4 style="font-size: 0.9rem;">Adathodai</h4>
+                        <p style="font-size: 0.75rem; color: var(--text-muted);">Justicia adhatoda</p>
+                    </div>
+                    
+                    <div class="info-panel" style="padding: 12px; text-align: center; margin-bottom: 0;" onclick="app.showPlantMockData('kuppaimeni')">
+                        <div style="height: 100px; background: #C8E6C9; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: center; align-items: center; font-size: 2rem;">🌱</div>
+                        <h4 style="font-size: 0.9rem;">Kuppaimeni</h4>
+                        <p style="font-size: 0.75rem; color: var(--text-muted);">Acalypha indica</p>
+                    </div>
+                    
+                    <div class="info-panel" style="padding: 12px; text-align: center; background: transparent; border: 2px dashed #ccc; margin-bottom: 0; display: flex; flex-direction: column; justify-content: center;">
+                        <div style="font-size: 1.5rem; color: #ccc; margin-bottom: 4px;">🔒</div>
+                        <p style="font-size: 0.75rem; color: var(--text-muted);">Discover more to unlock</p>
+                    </div>
+                </div>
+            </main>
+
+            <main id="view-settings" class="view">
+                <h2 class="section-title" style="font-size: 1.5rem; margin-bottom: 20px;">Settings</h2>
+                
+                <div class="info-panel" style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h4 style="font-size: 1rem;">Language (மொழி)</h4>
+                        <p style="font-size: 0.8rem; color: var(--text-muted);">English / தமிழ்</p>
+                    </div>
+                    <select style="padding: 8px; border-radius: 6px; border: 1px solid #ccc;">
+                        <option>English</option>
+                        <option>தமிழ்</option>
+                    </select>
+                </div>
+
+                <div class="info-panel" style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h4 style="font-size: 1rem;">Offline Infrastructure</h4>
+                        <p style="font-size: 0.8rem; color: var(--text-muted);">Cache local botanical dictionary</p>
+                    </div>
+                    <input type="checkbox" style="width: 20px; height: 20px;" checked>
+                </div>
+
+                <div class="info-panel" style="margin-bottom: 12px;">
+                    <h4 style="font-size: 1rem; margin-bottom: 8px;">Backup Collection Data</h4>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;">Download all identified plant files grouped into a standard Markdown structure suitable for digital journals.</p>
+                    <button class="action-button btn-secondary" style="padding: 10px; font-size: 0.9rem;" onclick="app.exportAllAlmanac()">Export Entire Vault (.md)</button>
+                </div>
+            </main>
+            
+        </div> </div> </div>
+
+<script>
+/**
+ * TNSnap Execution Framework
+ */
+const app = {
+    currentPlant: null,
+    videoStream: null,
+
+    // Router and lifecycle controller
+    navigateTo(viewId) {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.getElementById(viewId).classList.add('active');
+        
+        document.querySelectorAll('.nav-item').forEach(item => {
+            if (item.dataset.target === viewId) {
+                item.classList.add('active');
+            } else {
+                item.classList.remove('active');
+            }
+        });
+
+        // WebRTC Hardware Isolation Lifecycle
+        if (viewId === 'view-camera') {
+            this.startCamera();
+        } else {
+            this.stopCamera();
+        }
+    },
+
+    // Initialize WebRTC safe stream
+    async startCamera() {
+        try {
+            const video = document.getElementById('camera-stream');
+            this.videoStream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'environment' },
+                audio: false 
+            });
+            video.srcObject = this.videoStream;
+        } catch (err) {
+            console.error("Camera access blocked:", err);
+            alert("TNSnap requires access to the camera hardware to process images.");
+        }
+    },
+
+    // Explicit stream termination to protect user privacy
+    stopCamera() {
+        if (this.videoStream) {
+            this.videoStream.getTracks().forEach(track => track.stop());
+            this.videoStream = null;
+        }
+    },
+
+    // Capture explicit data matrix from viewfinder canvas
+    takeSnapshot() {
+        const video = document.getElementById('camera-stream');
+        const canvas = document.getElementById('snapshot-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        if(video.videoWidth > 0) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            this.stopCamera();
+            this.simulateAIProcessing(dataUrl);
+        }
+    },
+
+    simulateAIProcessing(dataUrl) {
+        const loadingText = document.getElementById('ai-processing-text');
+        if(loadingText) loadingText.style.display = 'block';
+        
+        setTimeout(() => {
+            if(loadingText) loadingText.style.display = 'none';
+            this.showPlantMockData('kuppaimeni');
+        }, 1500);
+    },
+
+    // Populate dynamic taxonomy matrices
+    showPlantMockData(plantKey) {
+        const plantDatabase = {
+            kuppaimeni: {
+                name: "Kuppaimeni (குப்பைமேனி)",
+                scientific: "Acalypha indica",
+                type: "Native Medicinal",
+                tagClass: "tag-medicinal",
+                uses: "Known in traditional Siddha formulations for managing surface skin conditions and calming minor venomous insect bites."
+            },
+            karuvelam: {
+                name: "Seemai Karuvelam (சீமைக்கருவேலம்)",
+                scientific: "Prosopis juliflora",
+                type: "Invasive Species",
+                tagClass: "tag-invasive",
+                uses: "Highly invasive species native to South America. Disrupts local water tables across Tamil Nadu plains. Tracking helps local reforestation drives."
+            },
+            adathodai: {
+                name: "Adathodai (ஆடாதோடை)",
+                scientific: "Justicia adhatoda",
+                type: "Native Medicinal",
+                tagClass: "tag-medicinal",
+                uses: "A prominent shrub in Tamil Nadu households. Leaves used in traditional medicine for respiratory support."
+            }
+        };
+
+        const target = plantDatabase[plantKey] || plantDatabase['kuppaimeni'];
+        
+        this.currentPlant = {
+            ...target,
+            dateDiscovered: new Date().toISOString().split('T')[0],
+            location: "Chennai, Tamil Nadu"
+        };
+
+        // Inject content into UI nodes
+        document.getElementById('res-name').innerText = this.currentPlant.name;
+        document.getElementById('res-scientific').innerText = this.currentPlant.scientific;
+        document.getElementById('res-uses').innerHTML = `<strong>Contextual Info:</strong> ${this.currentPlant.uses}`;
+        
+        const tagEl = document.getElementById('res-tag');
+        tagEl.className = `tag ${this.currentPlant.tagClass}`;
+        tagEl.innerText = this.currentPlant.type;
+
+        this.navigateTo('view-result');
+    },
+
+    // Direct Markdown export mechanics
+    exportToMarkdown() {
+        if (!this.currentPlant) return;
+        const text = `---\ntags: [botany, tn-flora, verification]\ndate: ${this.currentPlant.dateDiscovered}\nlocation: ${this.currentPlant.location}\n---\n# ${this.currentPlant.name}\n\n- **Scientific Taxonomy:** *${this.currentPlant.scientific}*\n- **Ecological Status:** ${this.currentPlant.type}\n\n## Structural Summary\n${this.currentPlant.uses}\n`;
+        this.triggerDownload(text, `${this.currentPlant.scientific.replace(' ', '_')}.md`);
+    },
+
+    exportAllAlmanac() {
+        const combinedVaultText = `# TNSnap Complete Herbarium Export\nGenerated: ${new Date().toLocaleDateString()}\n\n---\n\n## Record 1: Kuppaimeni\nScientific: *Acalypha indica*\nStatus: Verified Native\n\n## Record 2: Adathodai\nScientific: *Justicia adhatoda*\nStatus: Verified Native\n`;
+        this.triggerDownload(combinedVaultText, `tnsnap_herbarium_backup.md`);
+    },
+
+    triggerDownload(content, filename) {
+        const blob = new Blob([content], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        URL.revokeObjectURL(url);
+    }
+};
+
+// Background Service Worker Registry
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(err => console.warn('PWA Worker execution skipped:', err));
+    });
+}
+</script>
+</body>
+</html>
